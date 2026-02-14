@@ -1,0 +1,121 @@
+/* ==================== */
+/* 基础样式与全局设置 */
+/* ==================== */
+:root {
+  --primary-bg: #f5f7fa;
+  --scrollbar-thumb: #c1c1c1;
+  --scrollbar-track: #f1f1f1;
+  --card-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--primary-bg);
+  text-size-adjust: 100%; /* 标准属性 */
+  -webkit-text-size-adjust: 100%; /* 兼容旧版WebKit */
+}
+
+/* ==================== */
+/* 卡片组件样式 */
+/* ==================== */
+.card {
+  border: none;
+  box-shadow: var(--card-shadow);
+  transition: transform 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+}
+
+.card-header {
+  border-bottom: none;
+  padding: 15px 20px;
+  text-align: match-parent; /* 标准属性 */
+  text-align: -webkit-match-parent; /* 兼容Safari */
+}
+
+/* ==================== */
+/* 表格样式 */
+/* ==================== */
+.table {
+  margin-bottom: 0;
+}
+
+.table thead th {
+  border-bottom: none;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+  color: #6c757d;
+}
+
+/* ==================== */
+/* 进度条与渐变背景 */
+/* ==================== */
+.progress {
+  border-radius: 10px;
+  height: 8px;
+}
+
+.progress-bar {
+  border-radius: 10px;
+}
+
+.bg-gradient {
+  background: linear-gradient(90deg, #4bc0c0 0%, #ffcd56 50%, #ff6384 100%);
+  print-color-adjust: exact; /* 标准属性 */
+  -webkit-print-color-adjust: exact; /* Safari 兼容 */
+}
+
+/* ==================== */
+/* 自定义滚动条 (兼容现代浏览器) */
+/* ==================== */
+#message-container {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* WebKit专属样式 */
+#message-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+#message-container::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 3px;
+}
+
+#message-container::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+#message-container::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* ==================== */
+/* 响应式设计 */
+/* ==================== */
+@media (max-width: 992px) {
+  .gauge-container {
+    height: 100px;
+  }
+}
+
+/* ==================== */
+/* 打印样式优化 */
+/* ==================== */
+@media print {
+  body {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  
+  .card {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}

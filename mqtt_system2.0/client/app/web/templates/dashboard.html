@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <!-- 基本元数据 -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MQTT 监控仪表板</title>
+    
+    <!-- 引入Bootstrap和图标库 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <!-- 页面样式定义 -->
+    <style>
+        /* 卡片动画效果 */
+        .card {
+            transition: transform 0.3s;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        
+        /* 其他样式定义 */
+        .card-header {
+            font-weight: 600;
+        }
+        .status-badge {
+            font-size: 0.8rem;
+        }
+        #message-container {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .message-row {
+            transition: background-color 0.3s;
+        }
+        .message-row:hover {
+            background-color: #f8f9fa;
+        }
+        .temp-indicator {
+            width: 100%;
+            height: 10px;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+        .voltage-progress {
+            height: 10px;
+        }
+        .last-updated {
+            font-size: 0.85rem;
+        }
+        .gauge-container {
+            height: 220px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <!-- 历史数据模态框 - 用于显示设备历史数据 -->
+    <div class="modal fade" id="historyModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="historyModalLabel">设备历史数据</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body" id="historyModalBody">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast通知容器 - 用于显示临时通知消息 -->
+    <div id="toastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 11"></div>
+
+    <!-- 页面主体内容 -->
+    <div class="container-fluid py-4">
+        <!-- 页面标题区域 -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <h1 class="display-6">
+                    <i class="bi bi-speedometer2"></i> MQTT 监控仪表板
+                </h1>
+                <p class="text-muted">实时监控设备状态和消息流</p>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- 左侧主内容区 - 实时消息流 -->
+            <div class="col-lg-8">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <i class="bi bi-activity"></i> 实时消息流
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="message-container" class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>时间</th>
+                                        <th>设备</th>
+                                        <th>主题</th>
+                                        <th>温度 (°C)</th>
+                                        <th>电压 (V)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="message-list"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧边栏 - 设备状态和统计 -->
+            <div class="col-lg-4">
+                <!-- 设备状态卡片 -->
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <i class="bi bi-thermometer-half"></i> 设备状态
+                    </div>
+                    <div class="card-body" id="status-container">
+                        <div class="text-center py-5">
+                            <div class="spinner-border text-success" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">加载设备状态...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 系统统计卡片 -->
+                <div class="card border-info mt-4">
+                    <div class="card-header bg-info text-white">
+                        <i class="bi bi-graph-up"></i> 系统统计
+                    </div>
+                    <div class="card-body">
+                        <div class="gauge-container">
+                            <canvas id="tempChart"></canvas>
+                        </div>
+                        <div class="gauge-container">
+                            <canvas id="voltChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 引入JavaScript库和脚本 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/static/js/script.js"></script>
+    <script>
+        // 状态卡片模板
+        const statusCard = (device) => `
+            <div class="device-status mb-3 p-3 border rounded">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi ${device.id.includes('server') ? 'bi-server' : 'bi-phone'}"></i>
+                        ${device.id.toUpperCase()}
+                    </h5>
+                    <span class="badge ${device.temperature > 28 ? 'bg-danger' : 'bg-success'}">
+                        ${device.temperature}°C
+                    </span>
+                </div>
+                
+                <div class="temp-indicator bg-gradient 
+                    ${device.temperature < 25 ? 'bg-info' : 
+                     device.temperature < 28 ? 'bg-warning' : 'bg-danger'}">
+                </div>
+                
+                <div class="d-flex justify-content-between mt-2">
+                    <small>电压:</small>
+                    <small><strong>${device.voltage}V</strong></small>
+                </div>
+                <div class="progress voltage-progress mt-1">
+                    <div class="progress-bar bg-gradient" 
+                         role="progressbar" 
+                         style="width: ${((device.voltage - 3.3) / 0.9) * 100}%">
+                    </div>
+                </div>
+                
+                <div class="last-updated text-muted mt-2">
+                    <i class="bi bi-clock"></i> 
+                    ${new Date(device.last_updated).toLocaleString()}
+                </div>
+            </div>
+        `;
+
+        // 消息行模板
+        const messageRow = (msg) => `
+            <tr class="message-row">
+                <td>${new Date(msg.timestamp).toLocaleTimeString()}</td>
+                <td>${msg.device_id.toUpperCase()}</td>
+                <td><span class="badge ${msg.topic.includes('server') ? 'bg-success' : 'bg-primary'}">
+                    ${msg.topic}
+                </span></td>
+                <td class="${msg.temperature > 28 ? 'text-danger fw-bold' : ''}">
+                    ${msg.temperature}
+                </td>
+                <td>${msg.voltage}</td>
+            </tr>
+        `;
+
+        // 初始化图表
+        let tempChart, voltChart;
+        function initCharts() {
+            const tempCtx = document.getElementById('tempChart').getContext('2d');
+            const voltCtx = document.getElementById('voltChart').getContext('2d');
+            
+            tempChart = new Chart(tempCtx, {
+                type: 'gauge',
+                data: {
+                    datasets: [{
+                        value: 25,
+                        minValue: 20,
+                        data: [20, 25, 30],
+                        backgroundColor: ['#4bc0c0', '#ffcd56', '#ff6384'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    title: { display: true, text: '温度分布' }
+                }
+            });
+            
+            voltChart = new Chart(voltCtx, {
+                type: 'gauge',
+                data: {
+                    datasets: [{
+                        value: 3.7,
+                        minValue: 3.3,
+                        maxValue: 4.2,
+                        backgroundColor: ['#ff6384', '#ffcd56', '#4bc0c0'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    title: { display: true, text: '电压分布' }
+                }
+            });
+        }
+
+        // 更新图表数据
+        function updateCharts(data) {
+            if (data.length > 0) {
+                const avgTemp = data.reduce((sum, d) => sum + d.temperature, 0) / data.length;
+                const avgVolt = data.reduce((sum, d) => sum + d.voltage, 0) / data.length;
+                
+                if (tempChart) tempChart.data.datasets[0].value = avgTemp;
+                if (voltChart) voltChart.data.datasets[0].value = avgVolt;
+                
+                if (tempChart) tempChart.update();
+                if (voltChart) voltChart.update();
+            }
+        }
+
+        // 获取并更新数据
+        async function updateData() {
+            try {
+                // 获取当前状态
+                const statusRes = await fetch('/api/current_status');
+                const statusData = await statusRes.json();
+                document.getElementById('status-container').innerHTML = 
+                    statusData.map(d => statusCard(d)).join('');
+                
+                // 获取消息历史
+                const msgRes = await fetch('/api/message_history');
+                const msgData = await msgRes.json();
+                document.getElementById('message-list').innerHTML = 
+                    msgData.map(m => messageRow(m)).join('');
+                
+                // 更新图表
+                updateCharts(statusData);
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // 初始加载并设置定时刷新
+        document.addEventListener('DOMContentLoaded', () => {
+            initCharts();
+            updateData();
+            setInterval(updateData, 2000);
+        });
+    </script>
+</body>
+</html>
